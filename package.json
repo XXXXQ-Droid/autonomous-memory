@@ -1,37 +1,38 @@
 {
-    "name":  "qq-bridge-plugin-autonomous-memory",
-    "version":  "1.0.0",
-    "description":  "qq-bridge plugin: give the agent a chance to write an important memo before the bridge stops, and compensate on the next start if it stopped uncleanly",
-    "type":  "module",
-    "main":  "index.js",
-    "exports":  {
-                    ".":  "./index.js"
-                },
-    "files":  [
-                  "index.js",
-                  "README.md",
-                  "USAGE.zh-CN.md",
-                  "LICENSE"
-              ],
-    "keywords":  [
-                     "qq-bridge",
-                     "plugin",
-                     "memory",
-                     "memo",
-                     "shutdown"
-                 ],
-    "license":  "MIT",
-    "engines":  {
-                    "node":  ">=20"
-                },
-    "peerDependencies":  {
-                             "qq-bridge":  ">=0.2.1"
-                         },
-    "qqBridge":  {
-                     "plugin":  true,
-                     "api":  1,
-                     "configKey":  "memoryPlugin",
-                     "stateFile":  "state/autonomous-memory.json",
-                     "shutdownEndpoint":  "/api/plugin/memory/shutdown"
-                 }
+  "name": "qq-bridge-plugin-autonomous-memory",
+  "version": "1.1.0",
+  "description": "qq-bridge plugin: give the agent a chance to write an important memo before the bridge stops, and compensate on the next start if it stopped uncleanly",
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js"
+  },
+  "files": [
+    "index.js",
+    "README.md",
+    "USAGE.zh-CN.md",
+    "LICENSE",
+    "settings.html"
+  ],
+  "keywords": [
+    "qq-bridge",
+    "plugin",
+    "memory",
+    "memo",
+    "shutdown"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "peerDependencies": {
+    "qq-bridge": ">=0.2.1"
+  },
+  "qqBridge": {
+    "plugin": true,
+    "api": 1,
+    "configKey": "memoryPlugin",
+    "stateFile": "state/autonomous-memory.json",
+    "shutdownEndpoint": "/api/plugin/memory/shutdown"
+  }
 }

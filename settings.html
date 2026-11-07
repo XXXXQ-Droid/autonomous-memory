@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>插件设置 · 自主记忆</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; padding: 28px; font: 14px/1.6 "Microsoft YaHei", system-ui, sans-serif; background: #0f1115; color: #e6e8ee; }
+  .wrap { max-width: 760px; margin: 0 auto; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .sub { color: #8b93a7; margin-bottom: 22px; }
+  .card { background: #171a21; border: 1px solid #262b36; border-radius: 12px; padding: 18px 20px; margin-bottom: 16px; }
+  label { display: block; margin: 12px 0 6px; color: #b9c0d0; }
+  input[type=number], input[type=text], textarea { width: 100%; box-sizing: border-box; padding: 7px 10px; border-radius: 8px; border: 1px solid #2c3340; background: #0f1115; color: #e6e8ee; font: inherit; }
+  input[type=number] { width: 160px; }
+  input[type=checkbox] { width: 16px; height: 16px; vertical-align: -3px; }
+  button { padding: 8px 16px; border-radius: 8px; border: 1px solid #2f6fed; background: #2f6fed; color: #fff; cursor: pointer; font-size: 14px; }
+  button.ghost { background: transparent; color: #9fb6ff; }
+  button:disabled { opacity: .5; cursor: default; }
+  .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin-top: 14px; }
+  .status { margin-top: 12px; color: #8b93a7; white-space: pre-wrap; }
+  .ok { color: #4ade80; } .err { color: #f87171; }
+  .hint { color: #6f7789; font-size: 12px; margin-top: 4px; }
+  textarea { height: 160px; font-family: Consolas, monospace; font-size: 12px; }
+  h2 { font-size: 15px; margin: 0 0 10px; color: #d7dcea; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>自主记忆</h1>
+  <div class="sub">桥正常停止/重启前，给 Agent 一次写「备忘」的机会；上次没正常收尾，下次启动时补记。日记功能不受影响。</div>
+
+  <div class="card">
+    <h2>参数</h2>
+    <div class="row">
+      <label style="margin:0"><input type="checkbox" id="enabled"> 启用插件</label>
+    </div>
+    <label>收尾等待时间（毫秒，1000~60000）</label>
+    <input type="number" id="shutdownWaitMs" min="1000" max="60000" step="500" value="12000">
+    <div class="hint">停止时投递「收尾备忘」后等多久让它写完。太长会拖慢停止，太短可能来不及。</div>
+
+    <div class="row">
+      <label style="margin:0"><input type="checkbox" id="includeDiary"> 提醒里同时提到日记</label>
+    </div>
+
+    <label>提醒投递给哪个会话（留空 = ownerQQ 私聊）</label>
+    <input type="text" id="targetKey" placeholder="private:&lt;QQ&gt; 或 group:&lt;群号&gt;">
+
+    <div class="row">
+      <button id="save">保存</button>
+      <button id="reload" class="ghost">重新读取</button>
+    </div>
+    <div class="status" id="status"></div>
+  </div>
+
+  <div class="card">
+    <h2>导入 / 导出</h2>
+    <div class="hint">导出：把当前参数存成 JSON 文件，方便备份或换机迁移。导入：粘贴 JSON 后点「导入」，会先校验再写入。</div>
+    <div class="row">
+      <button id="export">导出为文件</button>
+      <button id="copy" class="ghost">复制到剪贴板</button>
+    </div>
+    <label>配置 JSON（可编辑后导入）</label>
+    <textarea id="json"></textarea>
+    <div class="row">
+      <button id="import">导入</button>
+      <button id="fill" class="ghost">载入当前配置</button>
+    </div>
+    <div class="status" id="ioStatus"></div>
+  </div>
+
+  <div class="card">
+    <h2>运行状态</h2>
+    <div class="status" id="state"></div>
+  </div>
+</div>
+
+<script>
+const token = new URLSearchParams(location.search).get('token') || '';
+const $ = (id) => document.getElementById(id);
+const setStatus = (el, msg, cls) => { const n = $(el); n.className = 'status ' + (cls || ''); n.textContent = msg; };
+
+async function api(path, opts) {
+  const sep = path.includes('?') ? '&' : '?';
+  const res = await fetch(path + sep + 'token=' + encodeURIComponent(token), opts);
+  const text = await res.text();
+  try { return { status: res.status, body: JSON.parse(text) }; } catch { return { status: res.status, body: { raw: text } }; }
+}
+
+function currentConfig() {
+  return {
+    enabled: $('enabled').checked,
+    shutdownWaitMs: Number($('shutdownWaitMs').value),
+    includeDiary: $('includeDiary').checked,
+    targetKey: $('targetKey').value.trim()
+  };
+}
+
+function fill(cfg, state) {
+  $('enabled').checked = cfg.enabled !== false;
+  $('shutdownWaitMs').value = cfg.shutdownWaitMs ?? 12000;
+  $('includeDiary').checked = cfg.includeDiary !== false;
+  $('targetKey').value = cfg.targetKey || '';
+  const last = state && state.lastStopAt ? new Date(state.lastStopAt).toLocaleString() : '还没停止过';
+  const clean = state && state.cleanExit === true ? '正常退出' : (state && state.cleanExit === false ? '上次未正常退出' : '—');
+  $('state').textContent = `上次停止：${last}\n退出状态：${clean}\n下次启动若判定为异常退出，会投递「补记备忘」`;
+  $('json').value = JSON.stringify(cfg, null, 2);
+}
+
+async function load() {
+  const r = await api('/api/plugin/memory', { method: 'GET' });
+  if (r.status !== 200) { setStatus('status', '读取失败（' + r.status + '）', 'err'); return; }
+  fill(r.body.config || {}, r.body.state || {});
+  setStatus('status', '已读取', 'ok');
+}
+
+$('save').onclick = async () => {
+  const r = await api('/api/plugin/memory', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(currentConfig()) });
+  if (r.status === 200 && r.body.ok) { fill(r.body.config, {}); setStatus('status', '已保存', 'ok'); }
+  else setStatus('status', '保存失败：' + JSON.stringify(r.body), 'err');
+};
+
+$('reload').onclick = load;
+
+$('export').onclick = () => {
+  const blob = new Blob([JSON.stringify(currentConfig(), null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'memory-plugin-config.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+  setStatus('ioStatus', '已导出 memory-plugin-config.json', 'ok');
+};
+
+$('copy').onclick = async () => {
+  try { await navigator.clipboard.writeText(JSON.stringify(currentConfig(), null, 2)); setStatus('ioStatus', '已复制到剪贴板', 'ok'); }
+  catch { setStatus('ioStatus', '复制失败，请手动选中文本', 'err'); }
+};
+
+$('fill').onclick = () => { $('json').value = JSON.stringify(currentConfig(), null, 2); };
+
+$('import').onclick = async () => {
+  let cfg;
+  try { cfg = JSON.parse($('json').value); } catch { setStatus('ioStatus', 'JSON 格式错误，无法解析', 'err'); return; }
+  const r = await api('/api/plugin/memory', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(cfg) });
+  if (r.status === 200 && r.body.ok) { fill(r.body.config, {}); setStatus('ioStatus', '导入成功', 'ok'); }
+  else setStatus('ioStatus', '导入失败：' + JSON.stringify(r.body), 'err');
+};
+
+load();
+</script>
+</body>
+</html>
